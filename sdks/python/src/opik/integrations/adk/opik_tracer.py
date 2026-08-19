@@ -443,8 +443,11 @@ class OpikTracer:
                     model = usage_data.model
                     usage = usage_data.opik_usage
             except Exception as e:
-                LOGGER.debug(
-                    f"Error converting LlmResponse to dict or extracting usage data, reason: {e}",
+                # Not debug: this is silent data loss. The span is still logged, but
+                # without output or usage, and nothing else reports that.
+                LOGGER.error(
+                    f"Error converting LlmResponse to dict or extracting usage data, "
+                    f"the LLM span will be logged without output and usage, reason: {e}",
                     exc_info=True,
                 )
 
