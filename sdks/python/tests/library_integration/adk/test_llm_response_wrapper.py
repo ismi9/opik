@@ -1,3 +1,4 @@
+import pytest
 import pydantic
 
 from google.adk import models as adk_models
@@ -97,22 +98,40 @@ def test_pop_llm_usage_data__reads_the_attached_dict():
     assert provider_usage["total_token_count"] == 8
 
 
-def test_conversion_failure_is_logged_at_error_level():
-    """A conversion failure must not be swallowed at DEBUG again.
+@pytest.mark.parametrize(
+    "tracer_module_name",
+    ["opik_tracer", "legacy_opik_tracer"],
+)
+def test_both_tracers_report_conversion_failure_at_error_level(tracer_module_name):
+    """A conversion failure must not be swallowed at DEBUG in either tracer.
 
     When it happens the span is still logged, but without output or usage, and
     nothing else surfaces that - so it has to be loud enough for an operator to see.
-    Asserted on the source of ``after_model_callback`` because reaching that handler
-    for real requires span and context state this module has no business building.
+    Both tracers share llm_response_wrapper, so both need the same treatment.
+
+    Asserted against the except-block itself. Driving the real callback here would
+    need span, context and registry state that this module has no business
+    assembling, and a test that rebuilds the logging call instead of executing it
+    would pass no matter what the handler does.
     """
+    import importlib
     import inspect
     import re
 
-    from opik.integrations.adk import opik_tracer
+    tracer_module = importlib.import_module(
+        f"opik.integrations.adk.{tracer_module_name}"
+    )
+    source = inspect.getsource(tracer_module)
 
-    source = inspect.getsource(opik_tracer.OpikTracer.after_model_callback)
-
-    assert re.search(
-        r"LOGGER\.error\(\s*\n?\s*(#.*\n\s*)*f?\"Error converting LlmResponse to dict",
+    handler = re.search(
+        r"except Exception[^:]*:\s*\n(?:\s*#.*\n)*\s*LOGGER\.(\w+)\(\s*\n?\s*"
+        r"\"Error converting LlmResponse to dict",
         source,
-    ), "the conversion failure must be logged at error level, not debug"
+    )
+    assert handler, (
+        f"{tracer_module_name}: could not find the conversion-failure handler"
+    )
+    assert handler.group(1) == "error", (
+        f"{tracer_module_name}: conversion failure is logged at "
+        f"LOGGER.{handler.group(1)}, expected LOGGER.error"
+    )

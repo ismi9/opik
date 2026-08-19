@@ -98,7 +98,9 @@ def _wrap_llm_response_create(
     # these classes defer their pydantic build, and serializing one from an Any-typed
     # field (custom_metadata is dict[str, Any]) hits a Rust downcast that skips the
     # lazy rebuild, raising "'MockValSer' object is not an instance of
-    # 'SchemaSerializer'" - fallback=str does not help. See pydantic/pydantic#13647.
+    # 'SchemaSerializer'" - fallback=str does not help. Upstream, still open:
+    # https://github.com/pydantic/pydantic/issues/13647 (deferred build arrived in
+    # google-genai 2.18.0, https://github.com/googleapis/python-genai/pull/2784).
     # Dumping the model directly goes through Python and does rebuild it.
     response.custom_metadata["opik_usage"] = adk_helpers.convert_adk_base_model_to_dict(
         usage_metadata
